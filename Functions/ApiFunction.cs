@@ -104,9 +104,9 @@ public class ApiFunction
         schedule.TotalFailovers = 0;
 
         // Enable v4, disable v3
-        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Enabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Enabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Disabled");
+        _ = await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Enabled");
+        _ = await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Enabled");
+        _ = await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Disabled");
 
         await _tableService.UpsertScheduleAsync(schedule);
         await _tableService.AddAuditLogAsync(name, "CutoverStart", $"Duration: {durationMinutes}min, AutoCutback: {autoCutback}", "API");
@@ -136,9 +136,9 @@ public class ApiFunction
         }
 
         // Disable v4, enable v3
-        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Disabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Disabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Enabled");
+        _ = await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Disabled");
+        _ = await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Disabled");
+        _ = await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Enabled");
 
         // Update schedule
         var details = $"Runs: {schedule.TotalV4Runs}, Failures: {schedule.TotalFailures}, Failovers: {schedule.TotalFailovers}";
@@ -224,6 +224,39 @@ public class ApiFunction
         
         var response = req.CreateResponse(messageId != null ? HttpStatusCode.OK : HttpStatusCode.InternalServerError);
         await response.WriteAsJsonAsync(new { success = messageId != null, messageId });
+        return response;
+    }
+
+    /// <summary>
+    /// POST /api/test/logicapp - Test Logic App state change
+    /// Body: { "resourceGroup": "TLI", "workflowName": "TLI-Prd-Toryburch-850-to-cw1-v3", "state": "Enabled" }
+    /// </summary>
+    [Function("TestLogicApp")]
+    public async Task<HttpResponseData> TestLogicApp(
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "test/logicapp")] HttpRequestData req)
+    {
+        var body = await req.ReadAsStringAsync();
+        var options = JsonSerializer.Deserialize<JsonElement>(body!);
+        
+        var rg = options.GetProperty("resourceGroup").GetString()!;
+        var workflow = options.GetProperty("workflowName").GetString()!;
+        var state = options.GetProperty("state").GetString()!;
+        
+        _logger.LogInformation("Testing Logic App state change: {RG}/{Workflow} -> {State}", rg, workflow, state);
+        
+        var currentState = await _logicAppService.GetLogicAppStateAsync(rg, workflow);
+        var (success, error) = await _logicAppService.SetLogicAppStateAsync(rg, workflow, state);
+        var newState = await _logicAppService.GetLogicAppStateAsync(rg, workflow);
+        
+        var response = req.CreateResponse(HttpStatusCode.OK);
+        await response.WriteAsJsonAsync(new { 
+            currentState, 
+            requestedState = state, 
+            success, 
+            error,
+            newState,
+            changed = currentState != newState
+        });
         return response;
     }
 }

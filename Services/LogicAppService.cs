@@ -60,43 +60,71 @@ public class LogicAppService
         }
     }
 
-    public async Task<bool> SetLogicAppStateAsync(string resourceGroup, string workflowName, string state)
+    public async Task<(bool Success, string? Error)> SetLogicAppStateAsync(string resourceGroup, string workflowName, string state)
     {
         try
         {
             var token = await GetAccessTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            // Get current definition
+            // Get current workflow
             var getResponse = await _httpClient.GetAsync($"{GetWorkflowUrl(resourceGroup, workflowName)}?api-version=2019-05-01");
-            if (!getResponse.IsSuccessStatusCode) return false;
+            if (!getResponse.IsSuccessStatusCode)
+            {
+                var getError = $"GET failed: {getResponse.StatusCode}";
+                _logger.LogError("Failed to get Logic App {WorkflowName}: {Status}", workflowName, getResponse.StatusCode);
+                return (false, getError);
+            }
 
             var json = await getResponse.Content.ReadAsStringAsync();
+            
+            // Parse and modify the JSON directly to preserve all properties
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-
-            // Build update body
-            var updateBody = new
+            
+            // Build minimal update body with only required fields
+            var properties = root.GetProperty("properties");
+            
+            var updateDict = new Dictionary<string, object>
             {
-                location = root.GetProperty("location").GetString(),
-                properties = new
+                ["location"] = root.GetProperty("location").GetString()!,
+                ["properties"] = new Dictionary<string, object>
                 {
-                    state = state,
-                    definition = root.GetProperty("properties").GetProperty("definition"),
-                    parameters = root.GetProperty("properties").GetProperty("parameters"),
-                    integrationAccount = new { id = root.GetProperty("properties").GetProperty("integrationAccount").GetProperty("id").GetString() }
+                    ["state"] = state,
+                    ["definition"] = JsonSerializer.Deserialize<object>(properties.GetProperty("definition").GetRawText())!
                 }
             };
+            
+            var propsDict = (Dictionary<string, object>)updateDict["properties"];
+            
+            // Add optional properties if they exist
+            if (properties.TryGetProperty("parameters", out var parameters))
+            {
+                propsDict["parameters"] = JsonSerializer.Deserialize<object>(parameters.GetRawText())!;
+            }
+            
+            if (properties.TryGetProperty("integrationAccount", out var ia))
+            {
+                propsDict["integrationAccount"] = JsonSerializer.Deserialize<object>(ia.GetRawText())!;
+            }
 
-            var content = new StringContent(JsonSerializer.Serialize(updateBody), Encoding.UTF8, "application/json");
+            var content = new StringContent(JsonSerializer.Serialize(updateDict), Encoding.UTF8, "application/json");
             var putResponse = await _httpClient.PutAsync($"{GetWorkflowUrl(resourceGroup, workflowName)}?api-version=2019-05-01", content);
 
-            return putResponse.IsSuccessStatusCode;
+            if (!putResponse.IsSuccessStatusCode)
+            {
+                var error = await putResponse.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to set Logic App state for {WorkflowName}: {Status} - {Error}", workflowName, putResponse.StatusCode, error);
+                return (false, $"PUT failed: {putResponse.StatusCode} - {error}");
+            }
+            
+            _logger.LogInformation("Set Logic App {WorkflowName} state to {State}", workflowName, state);
+            return (true, null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to set Logic App state for {WorkflowName}", workflowName);
-            return false;
+            return (false, $"Exception: {ex.Message}");
         }
     }
 
