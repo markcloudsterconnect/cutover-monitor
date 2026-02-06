@@ -9,12 +9,11 @@ var host = new HostBuilder()
     {
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
-        services.AddHttpClient();
         
-        // Register services
+        // Register services with typed HttpClient
         services.AddSingleton<TableStorageService>();
-        services.AddScoped<LogicAppService>();
-        services.AddScoped<TwilioService>();
+        services.AddHttpClient<LogicAppService>();
+        services.AddHttpClient<TwilioService>();
     })
     .Build();
 
