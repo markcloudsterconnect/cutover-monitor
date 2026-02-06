@@ -62,7 +62,7 @@ public class MonitorFunction
         _logger.LogInformation("Checking health of {Cutover}", schedule.RowKey);
 
         // Get v4 state
-        var v4State = await _logicAppService.GetLogicAppStateAsync(schedule.V4LogicAppName);
+        var v4State = await _logicAppService.GetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName);
         if (v4State != "Enabled")
         {
             _logger.LogWarning("{Cutover} v4 is not enabled, skipping health check", schedule.RowKey);
@@ -70,8 +70,8 @@ public class MonitorFunction
         }
 
         // Get recent runs
-        var (v4Runs, v4Failures) = await _logicAppService.GetRecentRunsAsync(schedule.V4LogicAppName, 30);
-        var (failoverRuns, _) = await _logicAppService.GetRecentRunsAsync(schedule.CutoverLogicAppName, 30);
+        var (v4Runs, v4Failures) = await _logicAppService.GetRecentRunsAsync(schedule.ResourceGroup, schedule.V4LogicAppName, 30);
+        var (failoverRuns, _) = await _logicAppService.GetRecentRunsAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, 30);
 
         // Update schedule stats
         schedule.TotalV4Runs += v4Runs;
@@ -120,11 +120,11 @@ public class MonitorFunction
         _logger.LogInformation("Starting cutover {Cutover} (triggered by {TriggeredBy})", schedule.RowKey, triggeredBy);
 
         // Enable v4 and cutover
-        await _logicAppService.SetLogicAppStateAsync(schedule.V4LogicAppName, "Enabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.CutoverLogicAppName, "Enabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Enabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Enabled");
         
         // Disable v3
-        await _logicAppService.SetLogicAppStateAsync(schedule.V3LogicAppName, "Disabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Disabled");
 
         // Update schedule
         schedule.IsActive = true;
@@ -150,11 +150,11 @@ public class MonitorFunction
         _logger.LogInformation("Ending cutover {Cutover} (triggered by {TriggeredBy})", schedule.RowKey, triggeredBy);
 
         // Disable v4 and cutover
-        await _logicAppService.SetLogicAppStateAsync(schedule.V4LogicAppName, "Disabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.CutoverLogicAppName, "Disabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Disabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Disabled");
         
         // Enable v3
-        await _logicAppService.SetLogicAppStateAsync(schedule.V3LogicAppName, "Enabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Enabled");
 
         // Update schedule
         schedule.IsActive = false;

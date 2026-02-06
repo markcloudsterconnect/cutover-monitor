@@ -39,8 +39,8 @@ public class ApiFunction
 
         foreach (var schedule in schedules)
         {
-            var v4State = await _logicAppService.GetLogicAppStateAsync(schedule.V4LogicAppName);
-            var v3State = await _logicAppService.GetLogicAppStateAsync(schedule.V3LogicAppName);
+            var v4State = await _logicAppService.GetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName);
+            var v3State = await _logicAppService.GetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName);
             
             status.Add(new
             {
@@ -104,9 +104,9 @@ public class ApiFunction
         schedule.TotalFailovers = 0;
 
         // Enable v4, disable v3
-        await _logicAppService.SetLogicAppStateAsync(schedule.V4LogicAppName, "Enabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.CutoverLogicAppName, "Enabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.V3LogicAppName, "Disabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Enabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Enabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Disabled");
 
         await _tableService.UpsertScheduleAsync(schedule);
         await _tableService.AddAuditLogAsync(name, "CutoverStart", $"Duration: {durationMinutes}min, AutoCutback: {autoCutback}", "API");
@@ -136,9 +136,9 @@ public class ApiFunction
         }
 
         // Disable v4, enable v3
-        await _logicAppService.SetLogicAppStateAsync(schedule.V4LogicAppName, "Disabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.CutoverLogicAppName, "Disabled");
-        await _logicAppService.SetLogicAppStateAsync(schedule.V3LogicAppName, "Enabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V4LogicAppName, "Disabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.CutoverLogicAppName, "Disabled");
+        await _logicAppService.SetLogicAppStateAsync(schedule.ResourceGroup, schedule.V3LogicAppName, "Enabled");
 
         // Update schedule
         var details = $"Runs: {schedule.TotalV4Runs}, Failures: {schedule.TotalFailures}, Failovers: {schedule.TotalFailovers}";
@@ -179,6 +179,8 @@ public class ApiFunction
         
         var schedule = await _tableService.GetScheduleAsync(name) ?? new CutoverSchedule { RowKey = name };
         
+        if (options.TryGetProperty("resourceGroup", out var rg))
+            schedule.ResourceGroup = rg.GetString() ?? "";
         if (options.TryGetProperty("v4", out var v4))
             schedule.V4LogicAppName = v4.GetString() ?? "";
         if (options.TryGetProperty("v3", out var v3))

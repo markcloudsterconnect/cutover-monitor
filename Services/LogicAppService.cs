@@ -12,7 +12,6 @@ public class LogicAppService
     private readonly HttpClient _httpClient;
     private readonly ILogger<LogicAppService> _logger;
     private readonly string _subscriptionId;
-    private readonly string _resourceGroup;
     private AccessToken? _cachedToken;
     private DateTime _tokenExpiry = DateTime.MinValue;
 
@@ -21,7 +20,6 @@ public class LogicAppService
         _httpClient = httpClient;
         _logger = logger;
         _subscriptionId = Environment.GetEnvironmentVariable("AzureSubscriptionId") ?? throw new InvalidOperationException("AzureSubscriptionId not configured");
-        _resourceGroup = Environment.GetEnvironmentVariable("AzureResourceGroup") ?? throw new InvalidOperationException("AzureResourceGroup not configured");
     }
 
     private async Task<string> GetAccessTokenAsync()
@@ -38,17 +36,17 @@ public class LogicAppService
         return _cachedToken.Value.Token;
     }
 
-    private string GetWorkflowUrl(string workflowName) =>
-        $"https://management.azure.com/subscriptions/{_subscriptionId}/resourceGroups/{_resourceGroup}/providers/Microsoft.Logic/workflows/{workflowName}";
+    private string GetWorkflowUrl(string resourceGroup, string workflowName) =>
+        $"https://management.azure.com/subscriptions/{_subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.Logic/workflows/{workflowName}";
 
-    public async Task<string?> GetLogicAppStateAsync(string workflowName)
+    public async Task<string?> GetLogicAppStateAsync(string resourceGroup, string workflowName)
     {
         try
         {
             var token = await GetAccessTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            var response = await _httpClient.GetAsync($"{GetWorkflowUrl(workflowName)}?api-version=2019-05-01");
+            var response = await _httpClient.GetAsync($"{GetWorkflowUrl(resourceGroup, workflowName)}?api-version=2019-05-01");
             if (!response.IsSuccessStatusCode) return null;
 
             var json = await response.Content.ReadAsStringAsync();
@@ -62,7 +60,7 @@ public class LogicAppService
         }
     }
 
-    public async Task<bool> SetLogicAppStateAsync(string workflowName, string state)
+    public async Task<bool> SetLogicAppStateAsync(string resourceGroup, string workflowName, string state)
     {
         try
         {
@@ -70,7 +68,7 @@ public class LogicAppService
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             // Get current definition
-            var getResponse = await _httpClient.GetAsync($"{GetWorkflowUrl(workflowName)}?api-version=2019-05-01");
+            var getResponse = await _httpClient.GetAsync($"{GetWorkflowUrl(resourceGroup, workflowName)}?api-version=2019-05-01");
             if (!getResponse.IsSuccessStatusCode) return false;
 
             var json = await getResponse.Content.ReadAsStringAsync();
@@ -91,7 +89,7 @@ public class LogicAppService
             };
 
             var content = new StringContent(JsonSerializer.Serialize(updateBody), Encoding.UTF8, "application/json");
-            var putResponse = await _httpClient.PutAsync($"{GetWorkflowUrl(workflowName)}?api-version=2019-05-01", content);
+            var putResponse = await _httpClient.PutAsync($"{GetWorkflowUrl(resourceGroup, workflowName)}?api-version=2019-05-01", content);
 
             return putResponse.IsSuccessStatusCode;
         }
@@ -102,7 +100,7 @@ public class LogicAppService
         }
     }
 
-    public async Task<(int Total, int Failed)> GetRecentRunsAsync(string workflowName, int minutesBack = 30)
+    public async Task<(int Total, int Failed)> GetRecentRunsAsync(string resourceGroup, string workflowName, int minutesBack = 30)
     {
         try
         {
@@ -110,7 +108,7 @@ public class LogicAppService
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var since = DateTime.UtcNow.AddMinutes(-minutesBack).ToString("yyyy-MM-ddTHH:mm:ssZ");
-            var url = $"{GetWorkflowUrl(workflowName)}/runs?api-version=2019-05-01&$filter=startTime ge {since}";
+            var url = $"{GetWorkflowUrl(resourceGroup, workflowName)}/runs?api-version=2019-05-01&$filter=startTime ge {since}";
 
             var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode) return (0, 0);
