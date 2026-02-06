@@ -1,0 +1,26 @@
+﻿## .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+
+## Azure Functions
+local.settings.json
+
+## IDE
+.vs/
+.vscode/
+*.swp
+
+## Build
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+
+## NuGet
+*.nupkg
+packages/

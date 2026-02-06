@@ -1,0 +1,14 @@
+﻿{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "TableStorageConnection": "<your-table-storage-connection-string>",
+    "AzureSubscriptionId": "<your-azure-subscription-id>",
+    "AzureResourceGroup": "<your-resource-group>",
+    "TwilioAccountSid": "<your-twilio-account-sid>",
+    "TwilioAuthToken": "<your-twilio-auth-token>",
+    "TwilioMessagingServiceSid": "<your-twilio-messaging-service-sid>",
+    "AlertPhoneNumber": "<your-phone-number>"
+  }
+}
